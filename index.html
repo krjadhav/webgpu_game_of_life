@@ -14,8 +14,8 @@
             // Useful for WebGPU initialization
 
             const canvas = document.querySelector("canvas");
+
             // Check if WebGPU is supported in the browser -->
-            
             if (!navigator.gpu) {
                 throw new Error("WebGPU not supported on this browser.");
             }
@@ -26,6 +26,15 @@
                 throw new Error("No appropriate GPUAdapter found.");
             }
 
+            const device = await adapter.requestDevice();
+
+            // Configure Canvas
+            const context = canvas.getContext("webgpu"); // target where WebGPU will render to
+            const canvasFormat = navigator.gpu.getPreferredCanvasFormat(); // get ideal pixel format for the canvs
+            context.configure({ // configure webgpu context
+                device: device,
+                format: canvasFormat
+            });
         </script>
     </body>
 </html>
