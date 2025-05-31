@@ -79,6 +79,20 @@
 
             device.queue.writeBuffer(vertexBuffer, 0, vertices);
             
+            // Define the vertex layout
+            // Each vertex has 2 components (x, y)
+            // Each component is a 32-bit float = 4 bytes
+            // So 2 components x and y take 8 bytes of memory
+            const vertexBufferLayout = {
+                arrayStride: 8, // how far to move in memory to get to the next vertex
+                attributes: [
+                    {
+                        format: "float32x2", // each vertext has 2 floating point numbers
+                        offset: 0, // how many bytes into the vertex the attribute starts
+                        shaderLocation: 0, // arbitary number from 0 - 15 to identify vertex shader
+                    }
+                ]
+            }
 
         </script>
     </body>
