@@ -13,7 +13,7 @@
             // Using module let's you use await without needing to wrap everything in an async function
             // Useful for WebGPU initialization
             
-            const GRID_SIZE = 4;
+            const GRID_SIZE = 32;
             
             
             // Canvas is where WebGPU will render to
@@ -86,25 +86,37 @@
             // Code is written in WSGL (WebGPU Shading Language)
             // vertex function takes a 2D position and returns a 4D position that WebGPU needs for rendering
             // fragment function returns a color for each pixel, so red here
-            
             const cellShaderModule = device.createShaderModule({
                 label: "Cell shader",
                 code: `
+                // gets the grid size from JS
                 @group(0) @binding(0) var<uniform> grid: vec2f;
                     
-                    @vertex
-                    fn vertexMain(@location(0) pos: vec2f) ->
+                // takes pos from the vertex buffer (square corner) and instance (0 - 1023 since 32x32 grid)
+                @vertex
+                fn vertexMain(@location(0) pos: vec2f, @builtin(instance_index) instance: u32) ->
                     @builtin(position) vec4f {
-                        return vec4f(pos / grid, 0, 1);
-                        }
-                        
-                        @fragment
-                        fn fragmentMain() -> @location(0) vec4f {
-                            return vec4f(1, 0, 0, 1);
-                            }
-                            
-                            `
-                        });
+                    
+                    // converts instance number to a float for math operations
+                    let i = f32(instance);
+
+                    // converts it into grid coordinates
+                    let cell = vec2f(i % grid.x, floor(i / grid.x));
+
+                    // positions it correctly in the grid
+                    let cellOffset = cell / grid * 2;
+                    let gridPos = (pos + 1)/grid - 1 + cellOffset;
+                    
+                    // returns final pos in WebGPU coordinate system
+                    return vec4f(gridPos, 0, 1);
+                }
+                    
+                @fragment
+                fn fragmentMain() -> @location(0) vec4f {
+                    return vec4f(1, 0, 0, 1);
+                }
+                `
+            });
                         
             // Create a pipeline that renders a cell
             const cellPipeline = device.createRenderPipeline({
@@ -165,7 +177,7 @@
             pass.setPipeline(cellPipeline);
             pass.setVertexBuffer(0, vertexBuffer);
             pass.setBindGroup(0, bindGroup);
-            pass.draw(vertices.length / 2);
+            pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE);
                     
             // finalize the command buffer and submits it to the GPU for execution
             pass.end()
