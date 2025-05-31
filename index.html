@@ -53,6 +53,18 @@
             pass.end()
             device.queue.submit([encoder.finish()]);
 
+            // Define vertices
+            const vertices = new Float32Array([
+                // positions
+                -0.8, -0.8, // Triangle 1
+                0.8, -0.8,
+                0.8, 0.8,
+
+                -0.8, -0.8, // Triangle 2
+                0.8, 0.8,
+                -0.8, 0.8,
+            ]);
+
 
         </script>
     </body>
