@@ -54,6 +54,9 @@
             device.queue.submit([encoder.finish()]);
 
             // Define vertices
+            // Typed arrays in JS lets you allocate continuous memory blocks.
+            // They tend to be more perfomant than regular arrays
+            // Float32Array is a typed array that stores 32-bit floating point numbers
             const vertices = new Float32Array([
                 // positions
                 -0.8, -0.8, // Triangle 1
