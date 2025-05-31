@@ -8,14 +8,24 @@
     
     <body>
         <canvas width="512" height="512"></canvas>
-
-        <!-- Check if WebGPU is supported -->
-        if (!navigator.gpu) {
-            throw new Error("WebGPU not supported on this browser.");
-          }
     
         <script type="module">
+            // Using module let's you use await without needing to wrap everything in an async function
+            // Useful for WebGPU initialization
+
             const canvas = document.querySelector("canvas");
+            // Check if WebGPU is supported in the browser -->
+            
+            if (!navigator.gpu) {
+                throw new Error("WebGPU not supported on this browser.");
+            }
+          
+            // Request access to GPU
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) {
+                throw new Error("No appropriate GPUAdapter found.");
+            }
+
         </script>
     </body>
 </html>
