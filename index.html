@@ -23,6 +23,16 @@
             });
             device.queue.writeBuffer(uniformBuffer, 0, uniformArray);
 
+            // Create a bind group to pass the grid uniforms into the pipeline
+            const bindGroup = device.createBindGroup({
+                label: "Cell renderer bind group",
+                layout: cellPipeline.getBindGroupLayout(0),
+                entries: [{
+                    binding: 0,
+                    resource: { buffer: uniformBuffer }
+                }],
+            });
+
 
             // Canvas is where WebGPU will render to
             const canvas = document.querySelector("canvas");
