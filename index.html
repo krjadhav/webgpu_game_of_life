@@ -94,6 +94,30 @@
                 ]
             }
 
+            //  Create Shaders 
+            // Code is written in WSGL (WebGPU Shading Language)
+            // vertex function takes a 2D position and returns a 4D position that WebGPU needs for rendering
+            // fragment function returns a color for each pixel, so red here
+
+            const cellShaderModule = device.createShaderModule({
+                label: "Cell shader",
+                code: `
+                @vertex
+                fn vertexMain(@location(0) pos: vec2f) ->
+                @builtin(position) vec4f {
+                return vec4f(pos, 0, 1);
+                }
+                
+                @fragment
+                fn fragmentMain() -> @location(0) vec4f {
+                return vec4f(1, 0, 0, 1);
+                }
+                
+                `
+            });
+
+
+
         </script>
     </body>
 </html>
