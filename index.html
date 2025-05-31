@@ -15,6 +15,8 @@
             
             const GRID_SIZE = 32;
             const UPDATE_INTERVAL = 200; // update every 200ms
+            const WORKGROUP_SIZE = 8;
+
             let step = 0; // Track how many simulation steps have been run
             
             
@@ -83,74 +85,86 @@
                     }
                 ]
             }
-            
+
+            // Create the bind group layout and pipeline layout.
+            const bindGroupLayout = device.createBindGroupLayout({
+                label: "Cell Bind Group Layout",
+                entries: [{
+                binding: 0,
+                // The grid uniform buffer needs to be accessible in vertex, fragment, and compute shaders
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                buffer: {} // Grid uniform buffer
+                }, {
+                binding: 1,
+                // Cell state input buffer needs to be readable in vertex and compute shaders
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+                buffer: { type: "read-only-storage"} // Cell state input buffer
+                }, {
+                binding: 2,
+                // Cell state output buffer only needs to be writable in compute shader
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: { type: "storage"} // Cell state output buffer
+                }]
+            });
+
+            const pipelineLayout = device.createPipelineLayout({
+                label: "Cell Pipeline Layout",
+                bindGroupLayouts: [ bindGroupLayout ],
+            });
+
             //  Create Shaders 
             // Code is written in WSGL (WebGPU Shading Language)
             // vertex function takes a 2D position and returns a 4D position that WebGPU needs for rendering
-            // fragment function returns a color for each pixel, so red here
+            
             const cellShaderModule = device.createShaderModule({
                 label: "Cell shader",
                 code: `
-
-                // replace individual param with structured input/output
-                struct VertexInput {
-                    @location(0) pos: vec2f,
-                    @builtin(instance_index) instance: u32,
-                }
-
+                // Output structure from vertex shader to fragment shader
                 struct VertexOutput {
-                    @builtin(position) pos: vec4f,
-                    @location(0) cell: vec2f,
-                }
-                    
-
-                // gets the grid size from JS
-                @group(0) @binding(0) var<uniform> grid: vec2f;
-                @group(0) @binding(1) var<storage> cellState: array<u32>;
-                    
-                // takes pos from the vertex buffer (square corner) and instance (0 - 1023 since 32x32 grid)
-                @vertex
-                fn vertexMain(input: VertexInput) -> VertexOutput {
-                    
-                    // converts instance number to a float for math operations
-                    let i = f32(input.instance);
-
-                    // converts it into grid coordinates
-                    let cell = vec2f(i % grid.x, floor(i / grid.x));
-
-                    // gets the cell state
-                    let state = f32(cellState[input.instance]);
-
-                    // positions it correctly in the grid
-                    let cellOffset = cell / grid * 2;
-
-                    // scales the position based on the cell's state
-                    let gridPos = (input.pos*state+1)/grid - 1 + cellOffset;
-                    
-                    // returns final pos in WebGPU coordinate system
-                    var output: VertexOutput;
-                    output.pos = vec4f(gridPos, 0, 1);
-                    output.cell = cell;
-                    return output;
-                }
-                struct FragInput{
-                @location(0) cell: vec2f, // Receives cell coordinates from vertex shader
+                    @builtin(position) position: vec4f,
+                    @location(0) cell: vec2f, // Pass normalized cell coordinates to fragment shader
                 };
 
-                // For each pixel of each square
-                // - creates a color based on the cell coordinates
+                // Uniforms and storage buffers accessible to shaders
+                @group(0) @binding(0) var<uniform> grid: vec2f; // Grid dimensions
+                @group(0) @binding(1) var<storage> cellState: array<u32>; // Current cell states
+
+                @vertex
+                fn vertexMain(@location(0) position: vec2f,
+                              @builtin(instance_index) instance: u32) -> VertexOutput {
+                    var output: VertexOutput;
+
+                    // Convert instance index to 2D cell coordinates
+                    let i = f32(instance);
+                    let cell = vec2f(i % grid.x, floor(i / grid.x));
+
+                    // Scale the cell based on its state (0 = dead/invisible, 1 = alive/visible)
+                    let scale = f32(cellState[instance]);
+                    
+                    // Calculate cell position in the grid
+                    // cellOffset: moves each cell to its grid position (normalized to 0-1)
+                    let cellOffset = cell / grid * 2;
+                    // gridPos: final position in clip space (-1 to 1)
+                    let gridPos = (position*scale+1) / grid - 1 + cellOffset;
+
+                    output.position = vec4f(gridPos, 0, 1);
+                    output.cell = cell / grid; // Normalize cell coordinates for fragment shader
+                    return output;
+                }
+
                 @fragment
-                fn fragmentMain(input: FragInput) -> @location(0) vec4f {
-                    let c = input.cell/grid;
-                    return vec4f(c, 1-c.x, 1);
+                fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+                    // Color cells based on their position in the grid
+                    // This creates a gradient effect across the grid
+                    return vec4f(input.cell, 1.0 - input.cell.x, 1);
                 }
                 `
             });
-                        
+
             // Create a pipeline that renders a cell
             const cellPipeline = device.createRenderPipeline({
                 label: "Cell pipeline",
-                layout: "auto", // let webgpu decide memory layout
+                layout: pipelineLayout, // let webgpu decide memory layout
                 vertex: {
                     module: cellShaderModule, // pass shader program
                     entryPoint: "vertexMain", // function entrypoint @vertex
@@ -167,6 +181,72 @@
                 },
             });
 
+            // Create the compute shader that will process the game of life simulation.
+            const simulationShaderModule = device.createShaderModule({
+                label: "Life simulation shader",
+                code: `
+                // Access to grid dimensions and cell states
+                @group(0) @binding(0) var<uniform> grid: vec2f;
+                @group(0) @binding(1) var<storage> cellStateIn: array<u32>; // Read current state
+                @group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>; // Write next state
+
+                // Convert 2D cell coordinates to 1D array index
+                // Uses modulo to wrap around edges (toroidal topology)
+                fn cellIndex(cell: vec2u) -> u32 {
+                    return (cell.y % u32(grid.y)) * u32(grid.x) +
+                           (cell.x % u32(grid.x));
+                }
+
+                // Check if a cell at given coordinates is active
+                fn cellActive(x: u32, y: u32) -> u32 {
+                    return cellStateIn[cellIndex(vec2(x, y))];
+                }
+
+                @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
+                fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
+                    // Skip cells outside grid bounds
+                    if (cell.x >= u32(grid.x) || cell.y >= u32(grid.y)) {
+                        return;
+                    }
+
+                    // Count active neighbors (8 surrounding cells)
+                    let activeNeighbors = cellActive(cell.x+1, cell.y+1) +
+                                        cellActive(cell.x+1, cell.y) +
+                                        cellActive(cell.x+1, cell.y-1) +
+                                        cellActive(cell.x, cell.y-1) +
+                                        cellActive(cell.x-1, cell.y-1) +
+                                        cellActive(cell.x-1, cell.y) +
+                                        cellActive(cell.x-1, cell.y+1) +
+                                        cellActive(cell.x, cell.y+1);
+
+                    let i = cellIndex(cell.xy);
+
+                    // Conway's game of life rules:
+                    switch activeNeighbors {
+                    case 2: { // Active cells with 2 neighbors stay active.
+                        cellStateOut[i] = cellStateIn[i];
+                    }
+                    case 3: { // Cells with 3 neighbors become or stay active.
+                        cellStateOut[i] = 1;
+                    }
+                    default: { // Cells with < 2 or > 3 neighbors become inactive.
+                        cellStateOut[i] = 0;
+                    }
+                    }
+                }
+                `
+            });
+            
+            // Create a compute pipeline that updates the game state.
+            const simulationPipeline = device.createComputePipeline({
+            label: "Simulation pipeline",
+            layout: pipelineLayout,
+            compute: {
+                module: simulationShaderModule,
+                entryPoint: "computeMain",
+            }
+            });
+
             // Create a uniform buffer that describes the grid
             const uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
             const uniformBuffer = device.createBuffer({
@@ -179,7 +259,8 @@
             // Create storage buffer
             const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE);
 
-            // Create two storage buffer to hold the cell state to implement ping pong scheme
+            // Create two storage buffers to hold the cell state to implement ping pong scheme
+            // Ping-pong pattern: read from one buffer, write to the other, then swap
             const cellStateStorage = [
                 device.createBuffer({
                     label: "Cell State A",
@@ -192,78 +273,89 @@
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
                 })
             ];
-            device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
 
-            // Mark every third cell of the grid as active
-            for (let i = 0; i < cellStateArray.length; i += 3) {
-                cellStateArray[i] = 1;
+            // Initialize with random pattern
+            // Set each cell to a random state
+            for (let i = 0; i < cellStateArray.length; ++i) {
+                cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
             }
             device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
-
-
-            // Mark everty other cell of the second grid as active
-            for (let i = 0; i < cellStateArray.length; i++) {
-                cellStateArray[i] = i % 2;
-            }
-            device.queue.writeBuffer(cellStateStorage[1], 0, cellStateArray);
 
             // Create a bind group to pass the grid uniforms into the pipeline
             // Unlike vertex data which is a fixed part of the pipeline's vertex state
-            // Uniforms are dynamic and can change between draw calls
+            // uniforms and storage buffers can change between draw calls
             // So, we need to explicitly create a bind group to pass the uniforms into the pipeline
-            const bindGroup = [
+            // Create two bind groups for ping-pong pattern
+            const bindGroups = [
                 device.createBindGroup({
                     label: "Cell renderer bind group A",
-                    layout: cellPipeline.getBindGroupLayout(0),
+                    layout: bindGroupLayout,
                     entries: [{
                     binding: 0,
                     resource: { buffer: uniformBuffer }
                     }, {
                     binding: 1,
-                    resource: { buffer: cellStateStorage[0] }
-                    }],
+                    resource: { buffer: cellStateStorage[0] } // Read from A
+                    }, {
+                        binding: 2,
+                        resource: { buffer: cellStateStorage[1] } // Write to B
+                    }]
                 }),
                 device.createBindGroup({
                     label: "Cell renderer bind group B",
-                    layout: cellPipeline.getBindGroupLayout(0),
+                    layout: bindGroupLayout,
                     entries: [{
                     binding: 0,
                     resource: { buffer: uniformBuffer }
                     }, {
                     binding: 1,
-                    resource: { buffer: cellStateStorage[1] }
-                    }], 
+                    resource: { buffer: cellStateStorage[1] } // Read from B
+                    }, {
+                        binding: 2,
+                        resource: { buffer: cellStateStorage[0] } // Write to A
+                    }],
                 })
             ];
 
             function updateGrid() {
-                // Increment the step count
-                step++;
+                // Create command encoder to record GPU commands
+                const encoder = device.createCommandEncoder();
 
-                // Clear the canvas with solid color
-                const encoder = device.createCommandEncoder(); // records sequence of GPU commands to be executed later
-                const pass = encoder.beginRenderPass({ // collection of draw commands that target canvas
+                // Start a compute pass to update cell states
+                const computePass = encoder.beginComputePass();
+                computePass.setPipeline(simulationPipeline);
+                computePass.setBindGroup(0, bindGroups[step % 2]); // Alternate between bind groups
+                
+                // Dispatch enough workgroups to cover the entire grid
+                const workgroupCount = Math.ceil(GRID_SIZE/WORKGROUP_SIZE);
+                computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
+                computePass.end();
+
+                step++; // Increment step AFTER compute to render the NEW state
+
+                // Start a render pass to draw the updated grid
+                const pass = encoder.beginRenderPass({
                 colorAttachments: [
                     {
-                        view: context.getCurrentTexture().createView(), // what to render to
-                        loadOp: 'clear', // clear the texture when the pass starts
-                        storeOp: 'store', // store the result after rendering
-                        clearValue: { r: 0.0, g: 0.0, b: 0.4, a: 1.0 }, // dark blue color
+                        view: context.getCurrentTexture().createView(), // Render to canvas
+                        loadOp: 'clear', // Clear the texture when the pass starts
+                        storeOp: 'store', // Store the result after rendering
+                        clearValue: { r: 0.0, g: 0.0, b: 0.4, a: 1.0 }, // Dark blue background
                     }
                 ]
                 });
                 
-                // Draw the square
+                // Draw the grid using instanced rendering
                 pass.setPipeline(cellPipeline);
                 pass.setVertexBuffer(0, vertexBuffer);
-                pass.setBindGroup(0, bindGroup[step % 2]);
-                pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE);
+                pass.setBindGroup(0, bindGroups[step % 2]); // Use the bind group with updated state
+                pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE); // Draw all cells in one call
                         
-                // finalize the command buffer and submits it to the GPU for execution
+                // Finalize the command buffer and submit it to the GPU for execution
                 pass.end()
                 device.queue.submit([encoder.finish()]);
-                
             }
+            
         // Schedule updateGrid() to run repeatedly
         setInterval(updateGrid, UPDATE_INTERVAL);
         </script>
