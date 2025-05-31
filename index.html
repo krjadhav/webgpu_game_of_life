@@ -1,363 +1,293 @@
-<!DOCTYPE html>
-
+<!doctype html>
 <html>
     <head>
-        <meta charset="UTF-8">
-        <title>WebGPU Game of Life</title>
+        <meta charset="utf-8">
+        <title>WebGPU Conway's Game of Life</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&display=swap');
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: 'Space Grotesk', monospace;
+                background: #0a0a0f;
+                color: #ffffff;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                overflow-x: hidden;
+                position: relative;
+            }
+
+            /* Animated background gradient */
+            body::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: 
+                    radial-gradient(circle at 20% 50%, rgba(120, 255, 154, 0.1) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 50%, rgba(255, 119, 170, 0.1) 0%, transparent 50%),
+                    radial-gradient(circle at 50% 50%, rgba(119, 170, 255, 0.05) 0%, transparent 70%);
+                animation: pulse 20s ease-in-out infinite;
+                z-index: -1;
+            }
+
+            @keyframes pulse {
+                0%, 100% { opacity: 0.5; transform: scale(1); }
+                50% { opacity: 0.8; transform: scale(1.1); }
+            }
+
+            .container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 30px;
+                padding: 20px;
+                max-width: 800px;
+                width: 100%;
+            }
+
+            h1 {
+                margin: 0;
+                font-size: 48px;
+                font-weight: 600;
+                text-align: center;
+                background: linear-gradient(135deg, #78ff9a 0%, #ff77aa 50%, #77aaff 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                text-transform: uppercase;
+                letter-spacing: 3px;
+                animation: glow 3s ease-in-out infinite;
+            }
+
+            @keyframes glow {
+                0%, 100% { filter: brightness(1) drop-shadow(0 0 20px rgba(120, 255, 154, 0.5)); }
+                50% { filter: brightness(1.2) drop-shadow(0 0 30px rgba(255, 119, 170, 0.7)); }
+            }
+
+            .subtitle {
+                font-size: 16px;
+                color: #888;
+                text-align: center;
+                margin-top: -20px;
+                letter-spacing: 2px;
+            }
+
+            .canvas-container {
+                position: relative;
+                border-radius: 16px;
+                overflow: hidden;
+                box-shadow: 
+                    0 0 60px rgba(120, 255, 154, 0.3),
+                    0 0 120px rgba(255, 119, 170, 0.2),
+                    inset 0 0 20px rgba(119, 170, 255, 0.1);
+                background: rgba(255, 255, 255, 0.02);
+                backdrop-filter: blur(10px);
+                padding: 2px;
+            }
+
+            canvas {
+                display: block;
+                border-radius: 14px;
+                width: 512px;
+                height: 512px;
+            }
+
+            .controls {
+                display: flex;
+                gap: 15px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            button {
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: 500;
+                font-family: 'Space Grotesk', monospace;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                background: linear-gradient(135deg, rgba(120, 255, 154, 0.1), rgba(255, 119, 170, 0.1));
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                backdrop-filter: blur(10px);
+                position: relative;
+                overflow: hidden;
+            }
+
+            button::before {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 0;
+                height: 0;
+                background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+                transform: translate(-50%, -50%);
+                transition: width 0.6s, height 0.6s;
+            }
+
+            button:hover {
+                transform: translateY(-2px);
+                box-shadow: 
+                    0 5px 20px rgba(120, 255, 154, 0.3),
+                    0 5px 40px rgba(255, 119, 170, 0.2);
+                border-color: rgba(255, 255, 255, 0.4);
+            }
+
+            button:hover::before {
+                width: 300px;
+                height: 300px;
+            }
+
+            button:active {
+                transform: translateY(0);
+            }
+
+            .info {
+                background: rgba(255, 255, 255, 0.03);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 25px;
+                border-radius: 16px;
+                max-width: 512px;
+                font-size: 14px;
+                line-height: 1.8;
+                margin-top: 20px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            }
+
+            .info h3 {
+                margin: 0 0 15px 0;
+                color: #78ff9a;
+                font-size: 18px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .info ul {
+                margin: 10px 0;
+                padding-left: 20px;
+            }
+
+            .info li {
+                margin: 8px 0;
+                color: rgba(255, 255, 255, 0.8);
+            }
+
+            .info li::marker {
+                color: #ff77aa;
+            }
+
+            .stats {
+                display: flex;
+                gap: 30px;
+                justify-content: center;
+                margin-top: 20px;
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.6);
+            }
+
+            .stat {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .stat-label {
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-size: 12px;
+            }
+
+            .stat-value {
+                color: #77aaff;
+                font-weight: 600;
+            }
+
+            .error {
+                background: rgba(255, 68, 68, 0.1);
+                border: 1px solid rgba(255, 68, 68, 0.3);
+                backdrop-filter: blur(10px);
+                color: #ff4444;
+                padding: 15px 25px;
+                border-radius: 8px;
+                margin-top: 20px;
+            }
+
+            /* Loading animation */
+            .loading {
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                border-radius: 50%;
+                border-top-color: #78ff9a;
+                animation: spin 1s ease-in-out infinite;
+            }
+
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+
+            /* Mobile responsiveness */
+            @media (max-width: 600px) {
+                h1 {
+                    font-size: 32px;
+                }
+
+                canvas {
+                    width: 320px;
+                    height: 320px;
+                }
+
+                .controls {
+                    gap: 10px;
+                }
+
+                button {
+                    padding: 10px 20px;
+                    font-size: 12px;
+                }
+            }
+        </style>
     </head>
-    
     <body>
-        <canvas width="512" height="512"></canvas>
-    
-        <script type="module">
-            // Using module let's you use await without needing to wrap everything in an async function
-            // Useful for WebGPU initialization
+        <div class="container">
+            <h1>Conway's Game of Life</h1>
+            <p class="subtitle">A Cellular Automaton in WebGPU</p>
             
-            const GRID_SIZE = 32;
-            const UPDATE_INTERVAL = 200; // update every 200ms
-            const WORKGROUP_SIZE = 8;
-
-            let step = 0; // Track how many simulation steps have been run
+            <div class="canvas-container">
+                <canvas width="512" height="512"></canvas>
+            </div>
             
-            
-            // Canvas is where WebGPU will render to
-            const canvas = document.querySelector("canvas");
-            
-            // Check if WebGPU is supported in the browser -->
-            if (!navigator.gpu) {
-                throw new Error("WebGPU not supported on this browser.");
-            }
-            
-            // Request access to GPU
-            const adapter = await navigator.gpu.requestAdapter();
-            if (!adapter) {
-                throw new Error("No appropriate GPUAdapter found.");
-            }
-            
-            const device = await adapter.requestDevice();
-            
-            // Configure Canvas
-            const context = canvas.getContext("webgpu"); // target where WebGPU will render to
-            const canvasFormat = navigator.gpu.getPreferredCanvasFormat(); // get ideal pixel format for the canvas
-            context.configure({ // configure webgpu context
-                device: device,
-                format: canvasFormat
-            });
-            
-            
-            // Define vertices
-            // Typed arrays in JS lets you allocate continuous memory blocks.
-            // They tend to be more perfomant than regular arrays
-            // Float32Array is a typed array that stores 32-bit floating point numbers
-            const vertices = new Float32Array([
-                // positions
-                -0.8, -0.8, // Triangle 1
-                0.8, -0.8,
-                0.8, 0.8,
-                
-                -0.8, -0.8, // Triangle 2
-                0.8, 0.8,
-                -0.8, 0.8,
-            ]);
-            
-            // Create a vertex buffer
-            // GPUs can't acess JS memory directly so memory must be allocated on the GPU
-            // This is managed through GPUBuffer
-            const vertexBuffer = device.createBuffer({
-                label: "Cell vertices",
-                size: vertices.byteLength,
-                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-            });
-            
-            device.queue.writeBuffer(vertexBuffer, 0, vertices);
-            
-            // Define the vertex layout
-            // Each vertex has 2 components (x, y)
-            // Each component is a 32-bit float = 4 bytes
-            // So 2 components x and y take 8 bytes of memory
-            const vertexBufferLayout = {
-                arrayStride: 8, // how far to move in memory to get to the next vertex
-                attributes: [
-                    {
-                        format: "float32x2", // each vertext has 2 floating point numbers
-                        offset: 0, // how many bytes into the vertex the attribute starts
-                        shaderLocation: 0, // arbitary number from 0 - 15 to identify vertex shader
-                    }
-                ]
-            }
+            <div class="info">
+                <h3>The Rules of Life</h3>
+                <ul>
+                    <li>Any live cell with 2-3 neighbors survives</li>
+                    <li>Any dead cell with exactly 3 neighbors becomes alive</li>
+                    <li>All other cells die or stay dead</li>
+                </ul>
+                <p style="margin-top: 15px; color: rgba(255, 255, 255, 0.6);">
+                    Watch as simple rules create complex, emergent patterns. Each cell's fate is determined by its neighbors in an endless dance of creation and destruction.
+                </p>
+            </div>
+        </div>
 
-            // Create the bind group layout and pipeline layout.
-            const bindGroupLayout = device.createBindGroupLayout({
-                label: "Cell Bind Group Layout",
-                entries: [{
-                binding: 0,
-                // The grid uniform buffer needs to be accessible in vertex, fragment, and compute shaders
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-                buffer: {} // Grid uniform buffer
-                }, {
-                binding: 1,
-                // Cell state input buffer needs to be readable in vertex and compute shaders
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
-                buffer: { type: "read-only-storage"} // Cell state input buffer
-                }, {
-                binding: 2,
-                // Cell state output buffer only needs to be writable in compute shader
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: { type: "storage"} // Cell state output buffer
-                }]
-            });
-
-            const pipelineLayout = device.createPipelineLayout({
-                label: "Cell Pipeline Layout",
-                bindGroupLayouts: [ bindGroupLayout ],
-            });
-
-            //  Create Shaders 
-            // Code is written in WSGL (WebGPU Shading Language)
-            // vertex function takes a 2D position and returns a 4D position that WebGPU needs for rendering
-            
-            const cellShaderModule = device.createShaderModule({
-                label: "Cell shader",
-                code: `
-                // Output structure from vertex shader to fragment shader
-                struct VertexOutput {
-                    @builtin(position) position: vec4f,
-                    @location(0) cell: vec2f, // Pass normalized cell coordinates to fragment shader
-                };
-
-                // Uniforms and storage buffers accessible to shaders
-                @group(0) @binding(0) var<uniform> grid: vec2f; // Grid dimensions
-                @group(0) @binding(1) var<storage> cellState: array<u32>; // Current cell states
-
-                @vertex
-                fn vertexMain(@location(0) position: vec2f,
-                              @builtin(instance_index) instance: u32) -> VertexOutput {
-                    var output: VertexOutput;
-
-                    // Convert instance index to 2D cell coordinates
-                    let i = f32(instance);
-                    let cell = vec2f(i % grid.x, floor(i / grid.x));
-
-                    // Scale the cell based on its state (0 = dead/invisible, 1 = alive/visible)
-                    let scale = f32(cellState[instance]);
-                    
-                    // Calculate cell position in the grid
-                    // cellOffset: moves each cell to its grid position (normalized to 0-1)
-                    let cellOffset = cell / grid * 2;
-                    // gridPos: final position in clip space (-1 to 1)
-                    let gridPos = (position*scale+1) / grid - 1 + cellOffset;
-
-                    output.position = vec4f(gridPos, 0, 1);
-                    output.cell = cell / grid; // Normalize cell coordinates for fragment shader
-                    return output;
-                }
-
-                @fragment
-                fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-                    // Color cells based on their position in the grid
-                    // This creates a gradient effect across the grid
-                    return vec4f(input.cell, 1.0 - input.cell.x, 1);
-                }
-                `
-            });
-
-            // Create a pipeline that renders a cell
-            const cellPipeline = device.createRenderPipeline({
-                label: "Cell pipeline",
-                layout: pipelineLayout, // let webgpu decide memory layout
-                vertex: {
-                    module: cellShaderModule, // pass shader program
-                    entryPoint: "vertexMain", // function entrypoint @vertex
-                    buffers: [vertexBufferLayout],
-                },
-                fragment: {
-                    module: cellShaderModule,
-                    entryPoint: "fragmentMain", // function entrypoint @fragment
-                    targets: [
-                        {
-                            format: canvasFormat, // pixel format to match canvas
-                        }
-                    ],
-                },
-            });
-
-            // Create the compute shader that will process the game of life simulation.
-            const simulationShaderModule = device.createShaderModule({
-                label: "Life simulation shader",
-                code: `
-                // Access to grid dimensions and cell states
-                @group(0) @binding(0) var<uniform> grid: vec2f;
-                @group(0) @binding(1) var<storage> cellStateIn: array<u32>; // Read current state
-                @group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>; // Write next state
-
-                // Convert 2D cell coordinates to 1D array index
-                // Uses modulo to wrap around edges (toroidal topology)
-                fn cellIndex(cell: vec2u) -> u32 {
-                    return (cell.y % u32(grid.y)) * u32(grid.x) +
-                           (cell.x % u32(grid.x));
-                }
-
-                // Check if a cell at given coordinates is active
-                fn cellActive(x: u32, y: u32) -> u32 {
-                    return cellStateIn[cellIndex(vec2(x, y))];
-                }
-
-                @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
-                fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
-                    // Skip cells outside grid bounds
-                    if (cell.x >= u32(grid.x) || cell.y >= u32(grid.y)) {
-                        return;
-                    }
-
-                    // Count active neighbors (8 surrounding cells)
-                    let activeNeighbors = cellActive(cell.x+1, cell.y+1) +
-                                        cellActive(cell.x+1, cell.y) +
-                                        cellActive(cell.x+1, cell.y-1) +
-                                        cellActive(cell.x, cell.y-1) +
-                                        cellActive(cell.x-1, cell.y-1) +
-                                        cellActive(cell.x-1, cell.y) +
-                                        cellActive(cell.x-1, cell.y+1) +
-                                        cellActive(cell.x, cell.y+1);
-
-                    let i = cellIndex(cell.xy);
-
-                    // Conway's game of life rules:
-                    switch activeNeighbors {
-                    case 2: { // Active cells with 2 neighbors stay active.
-                        cellStateOut[i] = cellStateIn[i];
-                    }
-                    case 3: { // Cells with 3 neighbors become or stay active.
-                        cellStateOut[i] = 1;
-                    }
-                    default: { // Cells with < 2 or > 3 neighbors become inactive.
-                        cellStateOut[i] = 0;
-                    }
-                    }
-                }
-                `
-            });
-            
-            // Create a compute pipeline that updates the game state.
-            const simulationPipeline = device.createComputePipeline({
-            label: "Simulation pipeline",
-            layout: pipelineLayout,
-            compute: {
-                module: simulationShaderModule,
-                entryPoint: "computeMain",
-            }
-            });
-
-            // Create a uniform buffer that describes the grid
-            const uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
-            const uniformBuffer = device.createBuffer({
-                label: "Grid buffer",
-                size: uniformArray.byteLength,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            });
-            device.queue.writeBuffer(uniformBuffer, 0, uniformArray);
-
-            // Create storage buffer
-            const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE);
-
-            // Create two storage buffers to hold the cell state to implement ping pong scheme
-            // Ping-pong pattern: read from one buffer, write to the other, then swap
-            const cellStateStorage = [
-                device.createBuffer({
-                    label: "Cell State A",
-                    size: cellStateArray.byteLength,
-                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-                }),
-                device.createBuffer({
-                    label: "Cell State B",
-                    size: cellStateArray.byteLength,
-                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-                })
-            ];
-
-            // Initialize with random pattern
-            // Set each cell to a random state
-            for (let i = 0; i < cellStateArray.length; ++i) {
-                cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
-            }
-            device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
-
-            // Create a bind group to pass the grid uniforms into the pipeline
-            // Unlike vertex data which is a fixed part of the pipeline's vertex state
-            // uniforms and storage buffers can change between draw calls
-            // So, we need to explicitly create a bind group to pass the uniforms into the pipeline
-            // Create two bind groups for ping-pong pattern
-            const bindGroups = [
-                device.createBindGroup({
-                    label: "Cell renderer bind group A",
-                    layout: bindGroupLayout,
-                    entries: [{
-                    binding: 0,
-                    resource: { buffer: uniformBuffer }
-                    }, {
-                    binding: 1,
-                    resource: { buffer: cellStateStorage[0] } // Read from A
-                    }, {
-                        binding: 2,
-                        resource: { buffer: cellStateStorage[1] } // Write to B
-                    }]
-                }),
-                device.createBindGroup({
-                    label: "Cell renderer bind group B",
-                    layout: bindGroupLayout,
-                    entries: [{
-                    binding: 0,
-                    resource: { buffer: uniformBuffer }
-                    }, {
-                    binding: 1,
-                    resource: { buffer: cellStateStorage[1] } // Read from B
-                    }, {
-                        binding: 2,
-                        resource: { buffer: cellStateStorage[0] } // Write to A
-                    }],
-                })
-            ];
-
-            function updateGrid() {
-                // Create command encoder to record GPU commands
-                const encoder = device.createCommandEncoder();
-
-                // Start a compute pass to update cell states
-                const computePass = encoder.beginComputePass();
-                computePass.setPipeline(simulationPipeline);
-                computePass.setBindGroup(0, bindGroups[step % 2]); // Alternate between bind groups
-                
-                // Dispatch enough workgroups to cover the entire grid
-                const workgroupCount = Math.ceil(GRID_SIZE/WORKGROUP_SIZE);
-                computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
-                computePass.end();
-
-                step++; // Increment step AFTER compute to render the NEW state
-
-                // Start a render pass to draw the updated grid
-                const pass = encoder.beginRenderPass({
-                colorAttachments: [
-                    {
-                        view: context.getCurrentTexture().createView(), // Render to canvas
-                        loadOp: 'clear', // Clear the texture when the pass starts
-                        storeOp: 'store', // Store the result after rendering
-                        clearValue: { r: 0.0, g: 0.0, b: 0.4, a: 1.0 }, // Dark blue background
-                    }
-                ]
-                });
-                
-                // Draw the grid using instanced rendering
-                pass.setPipeline(cellPipeline);
-                pass.setVertexBuffer(0, vertexBuffer);
-                pass.setBindGroup(0, bindGroups[step % 2]); // Use the bind group with updated state
-                pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE); // Draw all cells in one call
-                        
-                // Finalize the command buffer and submit it to the GPU for execution
-                pass.end()
-                device.queue.submit([encoder.finish()]);
-            }
-            
-        // Schedule updateGrid() to run repeatedly
-        setInterval(updateGrid, UPDATE_INTERVAL);
-        </script>
+        <!-- Load the main application module -->
+        <script type="module" src="src/main.js"></script>
     </body>
 </html>
