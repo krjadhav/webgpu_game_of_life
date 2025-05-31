@@ -35,7 +35,24 @@
                 device: device,
                 format: canvasFormat
             });
+
+            // Clear the canvas with solid color
+            const encoder = device.createCommandEncoder(); // records sequence of GPU commands to be executed later
+            const pass = encoder.beginRenderPass({ // collection of draw commands that target canvas
+                colorAttachments: [
+                    {
+                        view: context.getCurrentTexture().createView(), // what to render to
+                        loadOp: 'clear', // clear the texture when the pass starts
+                        storeOp: 'store' // store the result after rendering
+                    }
+                ]
+            });
+            
+            // finalize the command buffer and submits it to the GPU for execution
+            pass.end()
+            device.queue.submit([encoder.finish()]);
+
+
         </script>
     </body>
 </html>
-
