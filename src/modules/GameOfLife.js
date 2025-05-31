@@ -196,5 +196,8 @@ export class GameOfLife {
         
         // Render once to show new state
         this.updateGrid();
+        
+        // Start the simulation again
+        this.start();
     }
 }

@@ -51,9 +51,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         resetBtn.onclick = () => {
             game.reset();
             updateGeneration();
-            if (playPauseBtn.textContent === 'Play') {
-                playPauseBtn.textContent = 'Pause';
-            }
+            // Reset always starts the game, so button should show Pause
+            playPauseBtn.textContent = 'Pause';
         };
         controlsDiv.appendChild(resetBtn);
         
