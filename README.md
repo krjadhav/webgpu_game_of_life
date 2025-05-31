@@ -1,5 +1,7 @@
 # WebGPU Conway's Game of Life
 
+[Demo](https://krjadhav.github.io/webgpu_game_of_life/)
+
 A modern implementation of Conway's Game of Life using WebGPU, featuring a modular architecture and clean separation of concerns.
 
 ## Project Structure
