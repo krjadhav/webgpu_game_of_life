@@ -68,6 +68,17 @@
                 -0.8, 0.8,
             ]);
 
+            // Create a vertex buffer
+            // GPUs can't acess JS memory directly so memory must be allocated on the GPU
+            // This is managed through GPUBuffer
+            const vertexBuffer = device.createBuffer({
+                label: "Cell vertices",
+                size: vertices.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+            });
+
+            device.queue.writeBuffer(vertexBuffer, 0, vertices);
+            
 
         </script>
     </body>
