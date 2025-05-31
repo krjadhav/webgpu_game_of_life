@@ -1,6 +1,10 @@
 # WebGPU Conway's Game of Life
 
-[Demo](https://krjadhav.github.io/webgpu_game_of_life/)
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://krjadhav.github.io/webgpu_game_of_life/)
+
+<div align="center">
+  <img src="assets/conway_game_of_life_img.png" alt="WebGPU Conway's Game of Life" width="600">
+</div>
 
 A modern implementation of Conway's Game of Life using WebGPU, featuring a modular architecture and clean separation of concerns.
 
