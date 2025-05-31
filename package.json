@@ -1,0 +1,21 @@
+{
+  "name": "webgpu-game-of-life",
+  "version": "1.0.0",
+  "description": "Conway's Game of Life implemented with WebGPU",
+  "type": "module",
+  "scripts": {
+    "start": "npx http-server -p 8080 -c-1",
+    "dev": "npx http-server -p 8080 -c-1 --cors"
+  },
+  "keywords": [
+    "webgpu",
+    "game-of-life",
+    "cellular-automaton",
+    "gpu-computing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
