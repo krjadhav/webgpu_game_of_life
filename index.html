@@ -30,7 +30,7 @@
 
             // Configure Canvas
             const context = canvas.getContext("webgpu"); // target where WebGPU will render to
-            const canvasFormat = navigator.gpu.getPreferredCanvasFormat(); // get ideal pixel format for the canvs
+            const canvasFormat = navigator.gpu.getPreferredCanvasFormat(); // get ideal pixel format for the canvas
             context.configure({ // configure webgpu context
                 device: device,
                 format: canvasFormat
@@ -116,6 +116,25 @@
                 `
             });
 
+            // Create a pipeline that renders a cell
+            const cellPipeline = device.createRenderPipeline({
+                label: "Cell pipeline",
+                layout: "auto", // let webgpu decide memory layout
+                vertex: {
+                    module: cellShaderModule, // pass shader program
+                    entryPoint: "vertexMain", // function entrypoint @vertex
+                    buffers: [vertexBufferLayout],
+                },
+                fragment: {
+                    module: cellShaderModule,
+                    entryPoint: "fragmentMain", // function entrypoint @fragment
+                    targets: [
+                        {
+                            format: canvasFormat, // pixel format to match canvas
+                        }
+                    ],
+                },
+            });
 
 
         </script>
