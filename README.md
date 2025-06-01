@@ -12,22 +12,21 @@ A modern implementation of Conway's Game of Life using WebGPU, featuring a modul
 
 ```
 webgpu_game_of_life/
-├── index.html              # Entry point
-├── README.md              # This file
-├── package.json           # Project configuration
+├── index.html                     # Entry point
+├── package.json                   # Project configuration
 └── src/
-    ├── main.js            # Application entry point
-    ├── modules/           # Core modules
-    │   ├── GameOfLife.js      # Main game simulation class
-    │   ├── WebGPUContext.js   # WebGPU initialization and management
-    │   ├── ShaderManager.js   # Shader loading and preprocessing
-    │   ├── BufferManager.js   # GPU buffer creation and management
-    │   └── PipelineManager.js # Pipeline and bind group management
-    ├── shaders/           # WGSL shader files
-    │   ├── cellShader.wgsl     # Vertex/fragment shader for rendering
-    │   └── simulationShader.wgsl # Compute shader for simulation
-    └── utils/             # Utility files
-        └── constants.js   # Application constants
+    ├── main.js                    # Application entry point
+    ├── modules/                   # Core modules
+    │   ├── GameOfLife.js          # Main game simulation class
+    │   ├── WebGPUContext.js       # WebGPU initialization and management
+    │   ├── ShaderManager.js       # Shader loading and preprocessing
+    │   ├── BufferManager.js       # GPU buffer creation and management
+    │   └── PipelineManager.js     # Pipeline and bind group management
+    ├── shaders/                   # WGSL shader files
+    │   ├── cellShader.wgsl        # Vertex/fragment shader for rendering
+    │   └── simulationShader.wgsl  # Compute shader for simulation
+    └── utils/                     # Utility files
+        └── constants.js           # Application constants
 
 ```
 
